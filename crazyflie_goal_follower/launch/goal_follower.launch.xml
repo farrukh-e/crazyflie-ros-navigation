@@ -1,0 +1,72 @@
+<?xml version="1.0"?>
+<launch>
+  <arg
+    name="robot_prefix"
+    default="crazyflie"
+    description="Robot namespace/prefix used by goal follower node"/>
+  <arg
+    name="goal_topic"
+    default="/goal_pose"
+    description="PoseStamped goal topic"/>
+  <arg
+    name="use_takeoff"
+    default="true"
+    description="Take off automatically before first goal"/>
+  <arg
+    name="takeoff_height"
+    default="0.5"
+    description="Takeoff height in meters"/>
+  <arg
+    name="takeoff_duration_sec"
+    default="2.0"
+    description="Takeoff duration in seconds"/>
+  <arg
+    name="go_to_duration_sec"
+    default="3.0"
+    description="Go-to command duration in seconds"/>
+  <arg
+    name="use_sim_time"
+    default="true"
+    description="Use simulation time if true"/>
+
+  <include file="$(find-pkg-share ros_gz_crazyflie_bringup)/launch/crazyflie_simulation.launch.py"/>
+
+  <node
+    pkg="crazyflie_ros2_multiranger_test"
+    exec="service_compat"
+    name="crazyflie_service_compat"
+    output="screen">
+    <param name="robot_prefix" value="$(var robot_prefix)"/>
+    <param name="use_sim_time" value="$(var use_sim_time)"/>
+  </node>
+
+  <node
+    pkg="crazyflie_goal_follower"
+    exec="goal_follower_node"
+    name="goal_follower_node"
+    output="screen">
+    <param name="robot_prefix" value="$(var robot_prefix)"/>
+    <param name="goal_topic" value="$(var goal_topic)"/>
+    <param name="use_takeoff" value="$(var use_takeoff)"/>
+    <param name="takeoff_height" value="$(var takeoff_height)"/>
+    <param name="takeoff_duration_sec" value="$(var takeoff_duration_sec)"/>
+    <param name="go_to_duration_sec" value="$(var go_to_duration_sec)"/>
+    <param name="use_sim_time" value="$(var use_sim_time)"/>
+  </node>
+
+  <node
+    pkg="tf2_ros"
+    exec="static_transform_publisher"
+    name="map_to_odom_tf"
+    output="screen"
+    args="0 0 0 0 0 0 map $(var robot_prefix)/odom"/>
+
+  <node
+    pkg="rviz2"
+    exec="rviz2"
+    name="rviz2"
+    output="screen"
+    args="-d $(find-pkg-share crazyflie_ros2_multiranger_bringup)/config/sim_mapping.rviz">
+    <param name="use_sim_time" value="$(var use_sim_time)"/>
+  </node>
+</launch>
