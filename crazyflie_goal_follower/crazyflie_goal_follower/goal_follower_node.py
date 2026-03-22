@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 import rclpy
+import math
 from rclpy.node import Node
+from rclpy.qos import DurabilityPolicy, HistoryPolicy, QoSProfile, ReliabilityPolicy
 
 from geometry_msgs.msg import Point, PoseStamped
 from builtin_interfaces.msg import Duration as MsgDuration
-from nav_msgs.msg import Odometry
+from nav_msgs.msg import Odometry, OccupancyGrid
 
 from crazyflie_interfaces.srv import Takeoff, GoTo
 
@@ -37,12 +39,16 @@ class GoalFollowerNode(Node):
         self.go_to_duration_sec = self.declare_and_get("go_to_duration_sec", 5.0)
         self.goal_follow_height = self.declare_and_get("goal_follow_height", 0.5)
         self.wait_timeout = self.declare_and_get("wait_for_services_timeout_sec", 10.0)
+        self.use_map_line_check = self.declare_and_get("use_map_line_check", True)
+        self.map_topic = self.declare_and_get("map_topic", "/map")
+        self.occupancy_block_threshold = self.declare_and_get("occupancy_block_threshold", 65)
+        self.treat_unknown_as_obstacle = self.declare_and_get("treat_unknown_as_obstacle", True)
 
         self.ready = False
         self.has_taken_off = False
         self.takeoff_in_progress = False
-        self.initial_position = None
         self.current_position = None
+        self.map_msg = None
 
         self.get_logger().info(f"Using robot prefix: /{self.prefix}")
 
@@ -53,13 +59,24 @@ class GoalFollowerNode(Node):
         # Subscriptions
         self.odom_sub = self.create_subscription(Odometry, f"/{self.prefix}/odom", self.odom_cb, 10)
         self.goal_sub = self.create_subscription(PoseStamped, self.goal_topic, self.goal_cb, 10)
+        if self.use_map_line_check:
+            map_qos = QoSProfile(
+                depth=1,
+                reliability=ReliabilityPolicy.RELIABLE,
+                history=HistoryPolicy.KEEP_LAST,
+                durability=DurabilityPolicy.TRANSIENT_LOCAL,
+            )
+            self.map_sub = self.create_subscription(OccupancyGrid, self.map_topic, self.map_cb, map_qos)
         self.odom_log_timer = self.create_timer(1.0, self.log_current_odom)
 
         self.wait_for_services()
-        self.get_logger().info(f"Goal follower ready. Listening on {self.goal_topic}")
+        self.get_logger().info(
+            f"Goal follower ready. Listening on {self.goal_topic}"
+            + (f", map checks on {self.map_topic}" if self.use_map_line_check else "")
+        )
 
     def declare_and_get(self, name: str, default):
-        """Declare a parameter and return its value."""
+        """! @brief Declare a parameter and return its value."""
         self.declare_parameter(name, default)
         return self.get_parameter(name).value
 
@@ -87,7 +104,6 @@ class GoalFollowerNode(Node):
         self.current_position = (float(p.x), float(p.y), float(p.z))
 
         if not self.ready:
-            self.initial_position = (float(p.x), float(p.y), float(p.z))
             self.get_logger().info(
                 f"Initial position captured: x={p.x:.2f}, y={p.y:.2f}, z={p.z:.2f}"
             )
@@ -96,11 +112,14 @@ class GoalFollowerNode(Node):
                 self.get_logger().info("Initiating automatic takeoff after odometry became available")
                 self.ensure_takeoff_started()
 
+    def map_cb(self, msg: OccupancyGrid):
+        """! @brief Cache the latest static occupancy map used for line-of-sight checks."""
+        self.map_msg = msg
+
     def log_current_odom(self):
         """! @brief Print the latest odometry position."""
         if self.current_position is None:
             return
-
         x, y, z = self.current_position
         self.get_logger().info(f"Current odom position: x={x:.2f}, y={y:.2f}, z={z:.2f}")
 
@@ -173,7 +192,7 @@ class GoalFollowerNode(Node):
         self.has_taken_off = False
 
     def send_goto_for_goal(self, msg: PoseStamped):
-        """Send goal as absolute go_to target from PoseStamped."""
+        """! @brief Send goal as absolute go_to target from PoseStamped."""
         req = GoTo.Request()
         req.group_mask = 0
         req.relative = False
@@ -190,6 +209,69 @@ class GoalFollowerNode(Node):
             f"Sent go_to: x={req.goal.x:.2f} y={req.goal.y:.2f} "
             f"z={req.goal.z:.2f} yaw={req.yaw:.1f}deg"
         )
+
+    @staticmethod
+    def bresenham_line(x0: int, y0: int, x1: int, y1: int):
+        """! @brief Returns a list of (x, y) coordinates from (x0, y0) to (x1, y1)."""
+        dx = abs(x1 - x0)
+        dy = abs(y1 - y0)
+        sx = 1 if x0 < x1 else -1
+        sy = 1 if y0 < y1 else -1
+        err = dx - dy
+        x, y = x0, y0
+
+        while True:
+            yield x, y
+            if x == x1 and y == y1:
+                break
+            e2 = 2 * err
+            if e2 > -dy:
+                err -= dy
+                x += sx
+            if e2 < dx:
+                err += dx
+                y += sy
+
+    def world_to_map_cell(self, x: float, y: float):
+        """! @brief Convert world coordinates into map cell indices."""
+        if self.map_msg is None:
+            self.get_logger().warn("Ignoring goal: no map received yet on map topic")
+            return None
+        mx = math.floor((x - float(self.map_msg.info.origin.position.x)) / float(self.map_msg.info.resolution))
+        my = math.floor((y - float(self.map_msg.info.origin.position.y)) / float(self.map_msg.info.resolution))
+        if mx < 0 or my < 0 or mx >= int(self.map_msg.info.width) or my >= int(self.map_msg.info.height):
+            return None
+        return mx, my
+
+    def cell_is_blocked(self, occupancy_value: int) -> bool:
+        """! @brief Check if a map cell is blocked."""
+        if occupancy_value < 0:
+            return bool(self.treat_unknown_as_obstacle)
+        return occupancy_value >= int(self.occupancy_block_threshold)
+
+    def path_is_clear(self, goal_x: float, goal_y: float) -> bool:
+        if self.map_msg is None:
+            self.get_logger().warn("Ignoring goal: no map received yet on map topic")
+            return False
+        if self.current_position is None:
+            self.get_logger().warn("Ignoring goal: no current position available")
+            return False
+
+        start = self.world_to_map_cell(self.current_position[0], self.current_position[1])
+        goal = self.world_to_map_cell(goal_x, goal_y)
+        if start is None or goal is None:
+            self.get_logger().warn("Ignoring goal: start or goal is outside static map bounds")
+            return False
+
+        width = int(self.map_msg.info.width)
+        for mx, my in self.bresenham_line(start[0], start[1], goal[0], goal[1]):
+            occ = self.map_msg.data[my * width + mx]
+            if self.cell_is_blocked(occ):
+                self.get_logger().warn(
+                    f"Ignoring goal: blocked map cell ({mx}, {my}) occupancy={occ}"
+                )
+                return False
+        return True
 
     def goal_cb(self, msg: PoseStamped):
         """!
@@ -209,6 +291,11 @@ class GoalFollowerNode(Node):
             return
 
         try:
+            if self.use_map_line_check:
+                goal_x = float(msg.pose.position.x)
+                goal_y = float(msg.pose.position.y)
+                if not self.path_is_clear(goal_x, goal_y):
+                    return
             self.send_goto_for_goal(msg)
 
         except Exception as exc:

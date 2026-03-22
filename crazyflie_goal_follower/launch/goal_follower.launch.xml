@@ -28,6 +28,22 @@
     name="use_sim_time"
     default="true"
     description="Use simulation time if true"/>
+  <arg
+    name="use_map_line_check"
+    default="true"
+    description="If true, reject goals with blocked Bresenham line on static map"/>
+  <arg
+    name="map_topic"
+    default="/map"
+    description="OccupancyGrid topic for static map checks"/>
+  <arg
+    name="occupancy_block_threshold"
+    default="65"
+    description="Occupancy value considered blocked"/>
+  <arg
+    name="treat_unknown_as_obstacle"
+    default="true"
+    description="Treat unknown occupancy cells as blocked"/>
 
   <include file="$(find-pkg-share ros_gz_crazyflie_bringup)/launch/crazyflie_simulation.launch.py"/>
   <arg name="map_yaml" default="$(find-pkg-share crazyflie_goal_follower)/maps/greenhouse_map.yaml"/>
@@ -53,6 +69,10 @@
     <param name="takeoff_duration_sec" value="$(var takeoff_duration_sec)"/>
     <param name="go_to_duration_sec" value="$(var go_to_duration_sec)"/>
     <param name="use_sim_time" value="$(var use_sim_time)"/>
+    <param name="use_map_line_check" value="$(var use_map_line_check)"/>
+    <param name="map_topic" value="$(var map_topic)"/>
+    <param name="occupancy_block_threshold" value="$(var occupancy_block_threshold)"/>
+    <param name="treat_unknown_as_obstacle" value="$(var treat_unknown_as_obstacle)"/>
   </node>
 
   <node
