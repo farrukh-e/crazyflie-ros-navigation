@@ -22,7 +22,7 @@
     description="Takeoff duration in seconds"/>
   <arg
     name="go_to_duration_sec"
-    default="3.0"
+    default="5.0"
     description="Go-to command duration in seconds"/>
   <arg
     name="use_sim_time"

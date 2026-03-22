@@ -29,28 +29,20 @@ class GoalFollowerNode(Node):
         """
         super().__init__("goal_follower_node")
 
-        self.declare_parameter("robot_prefix", "crazyflie")
-        self.declare_parameter("goal_topic", "/goal_pose")
-        self.declare_parameter("use_takeoff", True)
-        self.declare_parameter("takeoff_height", 0.5)
-        self.declare_parameter("takeoff_duration_sec", 2.0)
-        self.declare_parameter("go_to_duration_sec", 5.0)
-        self.declare_parameter("goal_follow_height", 0.5)
-        self.declare_parameter("wait_for_services_timeout_sec", 10.0)
-
-        self.prefix = self.get_prefix()
-        self.goal_topic = self.get_parameter("goal_topic").value
-        self.use_takeoff = self.get_parameter("use_takeoff").value
-        self.takeoff_height = self.get_parameter("takeoff_height").value
-        self.takeoff_duration_sec = self.get_parameter("takeoff_duration_sec").value
-        self.go_to_duration_sec = self.get_parameter("go_to_duration_sec").value
-        self.goal_follow_height = self.get_parameter("goal_follow_height").value
-        self.wait_timeout = self.get_parameter("wait_for_services_timeout_sec").value
+        self.prefix = str(self.declare_and_get("robot_prefix", "/crazyflie"))
+        self.goal_topic = self.declare_and_get("goal_topic", "/goal_pose")
+        self.use_takeoff = self.declare_and_get("use_takeoff", True)
+        self.takeoff_height = self.declare_and_get("takeoff_height", 0.5)
+        self.takeoff_duration_sec = self.declare_and_get("takeoff_duration_sec", 2.0)
+        self.go_to_duration_sec = self.declare_and_get("go_to_duration_sec", 5.0)
+        self.goal_follow_height = self.declare_and_get("goal_follow_height", 0.5)
+        self.wait_timeout = self.declare_and_get("wait_for_services_timeout_sec", 10.0)
 
         self.ready = False
         self.has_taken_off = False
         self.takeoff_in_progress = False
         self.initial_position = None
+        self.current_position = None
 
         self.get_logger().info(f"Using robot prefix: /{self.prefix}")
 
@@ -61,17 +53,15 @@ class GoalFollowerNode(Node):
         # Subscriptions
         self.odom_sub = self.create_subscription(Odometry, f"/{self.prefix}/odom", self.odom_cb, 10)
         self.goal_sub = self.create_subscription(PoseStamped, self.goal_topic, self.goal_cb, 10)
+        self.odom_log_timer = self.create_timer(1.0, self.log_current_odom)
 
         self.wait_for_services()
         self.get_logger().info(f"Goal follower ready. Listening on {self.goal_topic}")
 
-    def get_prefix(self) -> str:
-        """!
-        @brief Read and sanitize the robot namespace prefix parameter.
-        @return Robot prefix without leading/trailing slashes.
-        """
-        prefix = str(self.get_parameter("robot_prefix").value).strip("/")
-        return prefix or "crazyflie"
+    def declare_and_get(self, name: str, default):
+        """Declare a parameter and return its value."""
+        self.declare_parameter(name, default)
+        return self.get_parameter(name).value
 
     def wait_for_services(self):
         """!
@@ -93,8 +83,10 @@ class GoalFollowerNode(Node):
         @brief Odometry callback used to mark odometry availability and capture initial pose.
         @param msg Incoming odometry message.
         """
+        p = msg.pose.pose.position
+        self.current_position = (float(p.x), float(p.y), float(p.z))
+
         if not self.ready:
-            p = msg.pose.pose.position
             self.initial_position = (float(p.x), float(p.y), float(p.z))
             self.get_logger().info(
                 f"Initial position captured: x={p.x:.2f}, y={p.y:.2f}, z={p.z:.2f}"
@@ -102,9 +94,17 @@ class GoalFollowerNode(Node):
             self.ready = True
             if self.use_takeoff:
                 self.get_logger().info("Initiating automatic takeoff after odometry became available")
-                self.try_takeoff()
+                self.ensure_takeoff_started()
 
-    def call(self, client, request, label: str, on_success=None, on_error=None):
+    def log_current_odom(self):
+        """! @brief Print the latest odometry position."""
+        if self.current_position is None:
+            return
+
+        x, y, z = self.current_position
+        self.get_logger().info(f"Current odom position: x={x:.2f}, y={y:.2f}, z={z:.2f}")
+
+    def call_service(self, client, request, label: str, on_success=None, on_error=None):
         """!
         @brief Call a ROS service asynchronously and return immediately.
         @param client Service client instance.
@@ -132,17 +132,20 @@ class GoalFollowerNode(Node):
         future.add_done_callback(done_cb)
         return future
 
-    def send_takeoff_request(self):
-        """!
-        @brief Build and send the takeoff service request.
-        """
+    def ensure_takeoff_started(self) -> bool:
+        """! @brief Ensure that the takeoff process has been initiated if required."""
+        if not self.use_takeoff or self.has_taken_off:
+            return True
+        if self.takeoff_in_progress:
+            return False
+
         req = Takeoff.Request(
             group_mask=0,
             height=float(self.takeoff_height),
             duration=to_msg_duration(float(self.takeoff_duration_sec)),
         )
         self.takeoff_in_progress = True
-        self.call(
+        self.call_service(
             self.takeoff_cli,
             req,
             "takeoff",
@@ -150,18 +153,6 @@ class GoalFollowerNode(Node):
             on_error=self.takeoff_error_cb,
         )
         self.get_logger().info("Takeoff sent before first goal")
-
-    def try_takeoff(self) -> bool:
-        """!
-        @brief Send one-time automatic takeoff.
-        @return True if goal processing can continue immediately, False otherwise.
-        """
-        if not self.use_takeoff or self.has_taken_off:
-            return True
-        if self.takeoff_in_progress:
-            return False
-
-        self.send_takeoff_request()
         return False
 
     def takeoff_done_cb(self, _response):
@@ -182,10 +173,7 @@ class GoalFollowerNode(Node):
         self.has_taken_off = False
 
     def send_goto_for_goal(self, msg: PoseStamped):
-        """!
-        @brief Send goal as absolute go_to target from PoseStamped.
-        @param msg Target pose message.
-        """
+        """Send goal as absolute go_to target from PoseStamped."""
         req = GoTo.Request()
         req.group_mask = 0
         req.relative = False
@@ -197,7 +185,7 @@ class GoalFollowerNode(Node):
         req.yaw = 0.0
         req.duration = to_msg_duration(float(self.go_to_duration_sec))
 
-        self.call(self.goto_cli, req, "go_to")
+        self.call_service(self.goto_cli, req, "go_to")
         self.get_logger().info(
             f"Sent go_to: x={req.goal.x:.2f} y={req.goal.y:.2f} "
             f"z={req.goal.z:.2f} yaw={req.yaw:.1f}deg"
@@ -217,11 +205,12 @@ class GoalFollowerNode(Node):
                 self.get_logger().warn("Ignoring goal: takeoff is still in progress")
             else:
                 self.get_logger().warn("Ignoring goal: takeoff has not completed yet")
-                self.try_takeoff()
+                self.ensure_takeoff_started()
             return
 
         try:
             self.send_goto_for_goal(msg)
+
         except Exception as exc:
             self.get_logger().error(f"Goal handling failed: {exc}")
 
