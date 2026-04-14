@@ -1,0 +1,168 @@
+<?xml version="1.0"?>
+<launch>
+  <arg
+    name="robot_prefix"
+    default="crazyflie_real"
+    description="Robot namespace/prefix used by goal follower node"/>
+  <arg
+    name="goal_topic"
+    default="/goal_pose"
+    description="PoseStamped goal topic"/>
+  <arg
+    name="use_takeoff"
+    default="true"
+    description="Take off automatically before first goal"/>
+  <arg
+    name="takeoff_height"
+    default="0.5"
+    description="Takeoff height in meters"/>
+  <arg
+    name="takeoff_duration_sec"
+    default="2.0"
+    description="Takeoff duration in seconds"/>
+  <arg
+    name="go_to_duration_sec"
+    default="1.25"
+    description="Go-to command duration in seconds"/>
+  <arg
+    name="use_sim_time"
+    default="false"
+    description="Use simulation time if true"/>
+  <arg
+    name="use_map_line_check"
+    default="true"
+    description="If true, reject goals with blocked Bresenham line on static map"/>
+  <arg
+    name="map_topic"
+    default="/map"
+    description="OccupancyGrid topic for static map checks"/>
+  <arg
+    name="occupancy_block_threshold"
+    default="65"
+    description="Occupancy value considered blocked"/>
+  <arg
+    name="treat_unknown_as_obstacle"
+    default="true"
+    description="Treat unknown occupancy cells as blocked"/>
+  <arg
+    name="enable_waypoint_publisher"
+    default="false"
+    description="Start waypoint publisher node when true"/>
+  <arg
+    name="waypoints"
+    default="$(find-pkg-share crazyflie_goal_follower)/maps/waypoints.txt"
+    description="Text file with waypoint rows like x, y or x, y, z"/>
+  <arg
+    name="waypoint_frame_id"
+    default="map"
+    description="Frame id for published PoseStamped goals"/>
+  <arg
+    name="waypoint_default_z"
+    default="0.0"
+    description="Default z used when CSV row has no z value"/>
+  <arg
+    name="waypoint_publish_period_sec"
+    default="1.0"
+    description="Period between publishing CSV waypoints"/>
+  <arg
+    name="waypoint_start_delay_sec"
+    default="1.0"
+    description="Delay before first waypoint publish"/>
+  <arg
+    name="map_yaml"
+    default="$(find-pkg-share crazyflie_goal_follower)/maps/greenhouse_map.yaml"
+    description="Static map YAML used by nav2 map_server"/>
+  <arg
+    name="crazyflies_yaml_file"
+    default="$(find-pkg-share crazyflie_ros2_multiranger_bringup)/config/crazyflie_real_crazyswarm2.yaml"
+    description="Crazyswarm2 robot configuration file"/>
+  <arg
+    name="odom_frame"
+    default="world"
+    description="Frame published by Crazyswarm2 odometry (commonly world or odom)"/>
+  <arg
+    name="enable_service_compat"
+    default="false"
+    description="Enable only when /&lt;robot_prefix&gt;/go_to and /takeoff are missing"/>
+
+  <include file="$(find-pkg-share crazyflie)/launch/launch.py">
+    <arg name="crazyflies_yaml_file" value="$(var crazyflies_yaml_file)"/>
+    <arg name="backend" value="cflib"/>
+    <arg name="mocap" value="False"/>
+    <arg name="rviz" value="False"/>
+    <arg name="gui" value="False"/>
+    <arg name="teleop" value="False"/>
+  </include>
+
+  <node
+    if="$(var enable_service_compat)"
+    pkg="crazyflie_ros2_multiranger_test"
+    exec="service_compat"
+    name="crazyflie_service_compat"
+    output="screen">
+    <param name="robot_prefix" value="$(var robot_prefix)"/>
+    <param name="use_sim_time" value="$(var use_sim_time)"/>
+  </node>
+
+  <node
+    pkg="crazyflie_goal_follower"
+    exec="goal_follower_node"
+    name="goal_follower_node"
+    output="screen">
+    <param name="robot_prefix" value="$(var robot_prefix)"/>
+    <param name="goal_topic" value="$(var goal_topic)"/>
+    <param name="use_takeoff" value="$(var use_takeoff)"/>
+    <param name="takeoff_height" value="$(var takeoff_height)"/>
+    <param name="takeoff_duration_sec" value="$(var takeoff_duration_sec)"/>
+    <param name="go_to_duration_sec" value="$(var go_to_duration_sec)"/>
+    <param name="use_sim_time" value="$(var use_sim_time)"/>
+    <param name="use_map_line_check" value="$(var use_map_line_check)"/>
+    <param name="map_topic" value="$(var map_topic)"/>
+    <param name="occupancy_block_threshold" value="$(var occupancy_block_threshold)"/>
+    <param name="treat_unknown_as_obstacle" value="$(var treat_unknown_as_obstacle)"/>
+  </node>
+
+  <node
+    if="$(var enable_waypoint_publisher)"
+    pkg="crazyflie_goal_follower"
+    exec="waypoint_publisher_node"
+    name="waypoint_publisher_node"
+    output="screen">
+    <param name="goal_topic" value="$(var goal_topic)"/>
+    <param name="waypoints_txt" value="$(var waypoints)"/>
+    <param name="frame_id" value="$(var waypoint_frame_id)"/>
+    <param name="default_z" value="$(var waypoint_default_z)"/>
+    <param name="publish_period_sec" value="$(var waypoint_publish_period_sec)"/>
+    <param name="start_delay_sec" value="$(var waypoint_start_delay_sec)"/>
+    <param name="use_sim_time" value="$(var use_sim_time)"/>
+  </node>
+
+  <node
+    pkg="tf2_ros"
+    exec="static_transform_publisher"
+    name="map_to_odom_tf"
+    output="screen"
+    args="0 0 0 0 0 0 map $(var odom_frame)"/>
+
+  <node
+    pkg="rviz2"
+    exec="rviz2"
+    name="rviz2"
+    output="screen"
+    args="-d $(find-pkg-share crazyflie_ros2_multiranger_bringup)/config/real_mapping.rviz">
+    <param name="use_sim_time" value="$(var use_sim_time)"/>
+  </node>
+
+  <node pkg="nav2_map_server" exec="map_server" name="map_server" output="screen">
+   <param name="yaml_filename" value="$(var map_yaml)"/>
+   <param name="frame_id" value="map"/>
+   <param name="use_sim_time" value="$(var use_sim_time)"/>
+  </node>
+
+  <node pkg="nav2_lifecycle_manager" exec="lifecycle_manager" name="lifecycle_manager_map" output="screen">
+    <param name="use_sim_time" value="$(var use_sim_time)"/>
+    <param name="autostart" value="true"/>
+    <param name="node_names" value="['map_server']"/>
+  </node>
+
+</launch>
