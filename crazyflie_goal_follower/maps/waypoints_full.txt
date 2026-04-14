@@ -1,0 +1,64 @@
+# start -> survey all racks -> return to start
+# built from greenhouse_map.pgm with static obstacles inflated by 0.20 m
+
+# initial position
+0.00,  1.15
+
+# left rack survey (inner/east face)
+-0.25,  1.15
+-0.25,  0.95
+-0.25,  0.65
+-0.25,  0.35
+-0.25,  0.05
+-0.25, -0.05
+
+# transition to right rack
+0.00, -0.05
+0.25, -0.05
+
+# right rack survey (inner/west face)
+0.25,  0.25
+0.25,  0.55
+0.25,  0.85
+0.25,  0.95
+
+# return to center aisle before middle rack run
+0.00,  0.95
+0.00,  0.65
+0.00,  0.40
+0.00,  0.15
+0.00, -0.10
+0.00, -0.40
+
+# move to middle-rack survey start
+-0.35, -0.40
+-0.70, -0.40
+-1.05, -0.40
+-1.35, -0.40
+-1.35, -0.48
+
+# middle rack survey (origin-facing/north face)
+-1.05, -0.48
+-0.75, -0.48
+-0.45, -0.48
+-0.15, -0.48
+0.15, -0.48
+0.45, -0.48
+0.75, -0.48
+1.05, -0.48
+1.35, -0.48
+
+# return to center aisle
+1.05, -0.48
+0.75, -0.48
+0.45, -0.48
+0.15, -0.48
+0.00, -0.40
+
+# return to initial position
+0.00, -0.10
+0.00,  0.15
+0.00,  0.40
+0.00,  0.65
+0.00,  0.90
+0.00,  1.15

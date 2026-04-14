@@ -28,6 +28,8 @@ setup(
     entry_points={
         "console_scripts": [
             "goal_follower_node = crazyflie_goal_follower.goal_follower_node:main",
+            "waypoint_publisher_node = crazyflie_goal_follower.waypoint_publisher_node:main",
+            "csv_waypoint_publisher_node = crazyflie_goal_follower.waypoint_publisher_node:main",
         ],
     },
 )

@@ -1,0 +1,46 @@
+# start -> middle rack survey -> return to start
+# generated for greenhouse_map.pgm with static obstacles inflated by 0.20 m
+
+# approach from initial position through center aisle
+0.00,  1.15
+0.00,  0.90
+0.00,  0.65
+0.00,  0.40
+0.00,  0.15
+0.00, -0.10
+0.00, -0.40
+
+# move left to start of middle-rack survey
+-0.35, -0.40
+-0.70, -0.40
+-1.05, -0.40
+-1.35, -0.40
+
+# drop to survey offset in front of rack face that points toward map origin
+-1.35, -0.48
+
+# survey pass along the origin-facing face of the middle rack
+-1.05, -0.48
+-0.75, -0.48
+-0.45, -0.48
+-0.15, -0.48
+0.15, -0.48
+0.45, -0.48
+0.75, -0.48
+1.05, -0.48
+1.35, -0.48
+
+# return from survey line to center aisle
+1.05, -0.48
+0.75, -0.48
+0.45, -0.48
+0.15, -0.48
+0.00, -0.40
+
+# return to initial position
+0.00, -0.10
+0.00,  0.15
+0.00,  0.40
+0.00,  0.65
+0.00,  0.90
+0.00,  1.15

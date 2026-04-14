@@ -22,7 +22,7 @@
     description="Takeoff duration in seconds"/>
   <arg
     name="go_to_duration_sec"
-    default="5.0"
+    default="1.25"
     description="Go-to command duration in seconds"/>
   <arg
     name="use_sim_time"
@@ -44,6 +44,30 @@
     name="treat_unknown_as_obstacle"
     default="true"
     description="Treat unknown occupancy cells as blocked"/>
+  <arg
+    name="enable_waypoint_publisher"
+    default="false"
+    description="Start waypoint publisher node when true"/>
+  <arg
+    name="waypoints"
+    default="$(find-pkg-share crazyflie_goal_follower)/maps/waypoints.txt"
+    description="Text file with waypoint rows like x, y or x, y, z"/>
+  <arg
+    name="waypoint_frame_id"
+    default="map"
+    description="Frame id for published PoseStamped goals"/>
+  <arg
+    name="waypoint_default_z"
+    default="0.0"
+    description="Default z used when CSV row has no z value"/>
+  <arg
+    name="waypoint_publish_period_sec"
+    default="1.0"
+    description="Period between publishing CSV waypoints"/>
+  <arg
+    name="waypoint_start_delay_sec"
+    default="1.0"
+    description="Delay before first waypoint publish"/>
 
   <include file="$(find-pkg-share ros_gz_crazyflie_bringup)/launch/crazyflie_simulation.launch.py"/>
   <arg name="map_yaml" default="$(find-pkg-share crazyflie_goal_follower)/maps/greenhouse_map.yaml"/>
@@ -73,6 +97,21 @@
     <param name="map_topic" value="$(var map_topic)"/>
     <param name="occupancy_block_threshold" value="$(var occupancy_block_threshold)"/>
     <param name="treat_unknown_as_obstacle" value="$(var treat_unknown_as_obstacle)"/>
+  </node>
+
+  <node
+    if="$(var enable_waypoint_publisher)"
+    pkg="crazyflie_goal_follower"
+    exec="waypoint_publisher_node"
+    name="waypoint_publisher_node"
+    output="screen">
+    <param name="goal_topic" value="$(var goal_topic)"/>
+    <param name="waypoints_txt" value="$(var waypoints)"/>
+    <param name="frame_id" value="$(var waypoint_frame_id)"/>
+    <param name="default_z" value="$(var waypoint_default_z)"/>
+    <param name="publish_period_sec" value="$(var waypoint_publish_period_sec)"/>
+    <param name="start_delay_sec" value="$(var waypoint_start_delay_sec)"/>
+    <param name="use_sim_time" value="$(var use_sim_time)"/>
   </node>
 
   <node

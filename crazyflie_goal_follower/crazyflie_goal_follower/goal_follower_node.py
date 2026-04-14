@@ -7,6 +7,7 @@ from rclpy.qos import DurabilityPolicy, HistoryPolicy, QoSProfile, ReliabilityPo
 from geometry_msgs.msg import Point, PoseStamped
 from builtin_interfaces.msg import Duration as MsgDuration
 from nav_msgs.msg import Odometry, OccupancyGrid
+from tf_transformations import euler_from_quaternion
 
 from crazyflie_interfaces.srv import Takeoff, GoTo
 
@@ -36,7 +37,7 @@ class GoalFollowerNode(Node):
         self.use_takeoff = self.declare_and_get("use_takeoff", True)
         self.takeoff_height = self.declare_and_get("takeoff_height", 0.5)
         self.takeoff_duration_sec = self.declare_and_get("takeoff_duration_sec", 2.0)
-        self.go_to_duration_sec = self.declare_and_get("go_to_duration_sec", 5.0)
+        self.go_to_duration_sec = self.declare_and_get("go_to_duration_sec", 1.25)
         self.goal_follow_height = self.declare_and_get("goal_follow_height", 0.5)
         self.wait_timeout = self.declare_and_get("wait_for_services_timeout_sec", 10.0)
         self.use_map_line_check = self.declare_and_get("use_map_line_check", True)
@@ -201,6 +202,7 @@ class GoalFollowerNode(Node):
             y=float(msg.pose.position.y),
             z=float(self.goal_follow_height),
         )
+        _, _, yaw = euler_from_quaternion([msg.pose.orientation.x, msg.pose.orientation.y, msg.pose.orientation.z, msg.pose.orientation.w])
         req.yaw = 0.0
         req.duration = to_msg_duration(float(self.go_to_duration_sec))
 
