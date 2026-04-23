@@ -23,6 +23,7 @@ setup(
     entry_points={
         'console_scripts': [
             'test_node = crazyflie_ros2_test.test_node:main',
+            'service_compat = crazyflie_ros2_test.service_compat:main',
         ],
     },
 )

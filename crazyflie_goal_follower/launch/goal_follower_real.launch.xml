@@ -10,7 +10,7 @@
     description="PoseStamped goal topic"/>
   <arg
     name="use_takeoff"
-    default="true"
+    default="false"
     description="Take off automatically before first goal"/>
   <arg
     name="takeoff_height"
@@ -25,6 +25,10 @@
     default="1.25"
     description="Go-to command duration in seconds"/>
   <arg
+    name="wait_for_services_timeout_sec"
+    default="30.0"
+    description="Timeout while waiting for takeoff/go_to/land services"/>
+  <arg
     name="use_sim_time"
     default="false"
     description="Use simulation time if true"/>
@@ -36,6 +40,14 @@
     name="map_topic"
     default="/map"
     description="OccupancyGrid topic for static map checks"/>
+  <arg
+    name="tf_topic"
+    default="/tf"
+    description="TF topic used as position fallback when odom/pose are unavailable"/>
+  <arg
+    name="tf_child_frame"
+    default="$(var robot_prefix)"
+    description="TF child frame to track (commonly robot name like cf231)"/>
   <arg
     name="occupancy_block_threshold"
     default="65"
@@ -96,7 +108,7 @@
 
   <node
     if="$(var enable_service_compat)"
-    pkg="crazyflie_ros2_multiranger_test"
+    pkg="crazyflie_ros2_test"
     exec="service_compat"
     name="crazyflie_service_compat"
     output="screen">
@@ -115,9 +127,12 @@
     <param name="takeoff_height" value="$(var takeoff_height)"/>
     <param name="takeoff_duration_sec" value="$(var takeoff_duration_sec)"/>
     <param name="go_to_duration_sec" value="$(var go_to_duration_sec)"/>
+    <param name="wait_for_services_timeout_sec" value="$(var wait_for_services_timeout_sec)"/>
     <param name="use_sim_time" value="$(var use_sim_time)"/>
     <param name="use_map_line_check" value="$(var use_map_line_check)"/>
     <param name="map_topic" value="$(var map_topic)"/>
+    <param name="tf_topic" value="$(var tf_topic)"/>
+    <param name="tf_child_frame" value="$(var tf_child_frame)"/>
     <param name="occupancy_block_threshold" value="$(var occupancy_block_threshold)"/>
     <param name="treat_unknown_as_obstacle" value="$(var treat_unknown_as_obstacle)"/>
   </node>

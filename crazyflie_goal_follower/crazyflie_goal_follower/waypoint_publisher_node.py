@@ -115,10 +115,16 @@ def main():
     node = WaypointPublisherNode()
     try:
         rclpy.spin(node)
+    except KeyboardInterrupt:
+        pass
     finally:
         node.destroy_node()
-        rclpy.shutdown()
-
+        try:
+            if rclpy.ok():
+                rclpy.shutdown()
+        except Exception:
+            # Launch may have already shut down this context.
+            pass
 
 if __name__ == "__main__":
     main()

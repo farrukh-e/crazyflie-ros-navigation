@@ -25,6 +25,10 @@
     default="1.25"
     description="Go-to command duration in seconds"/>
   <arg
+    name="wait_for_services_timeout_sec"
+    default="30.0"
+    description="Timeout while waiting for takeoff/go_to/land services"/>
+  <arg
     name="use_sim_time"
     default="true"
     description="Use simulation time if true"/>
@@ -37,6 +41,14 @@
     default="/map"
     description="OccupancyGrid topic for static map checks"/>
   <arg
+    name="tf_topic"
+    default="/tf"
+    description="TF topic used as position fallback when odom/pose are unavailable"/>
+  <arg
+    name="tf_child_frame"
+    default="$(var robot_prefix)"
+    description="TF child frame to track (commonly robot name like cf231)"/>
+  <arg
     name="occupancy_block_threshold"
     default="65"
     description="Occupancy value considered blocked"/>
@@ -46,7 +58,7 @@
     description="Treat unknown occupancy cells as blocked"/>
   <arg
     name="enable_waypoint_publisher"
-    default="false"
+    default="true"
     description="Start waypoint publisher node when true"/>
   <arg
     name="waypoints"
@@ -68,17 +80,58 @@
     name="waypoint_start_delay_sec"
     default="1.0"
     description="Delay before first waypoint publish"/>
+  <arg
+    name="enable_service_compat"
+    default="false"
+    description="Enable compatibility services for sim go_to/takeoff/land"/>
+  <arg
+    name="use_crazyswarm2_server"
+    default="false"
+    description="Use Crazyswarm2 server instead of ros_gz control services"/>
+  <arg
+    name="crazyflies_yaml_file"
+    default="$(find-pkg-share crazyflie_goal_follower)/config/crazyflies_lighhouse.yaml"
+    description="Crazyswarm2 crazyflies yaml used when use_crazyswarm2_server=true"/>
+  <arg
+    name="crazyswarm_backend"
+    default="sim"
+    description="Crazyswarm2 backend (sim, cflib, cpp) when use_crazyswarm2_server=true"/>
+  <arg
+    name="venv_site_packages"
+    default="$(env HOME)/Projects/Crazyflie/.venv/lib/python3.12/site-packages"
+    description="Python site-packages path used to expose rowan for crazyswarm2 sim"/>
+  <arg
+    name="cffirmware_python_path"
+    default="$(env HOME)/Projects/Crazyflie/crazyflie-firmware/build"
+    description="Path containing cffirmware Python bindings for crazyswarm2 sim"/>
 
-  <include file="$(find-pkg-share ros_gz_crazyflie_bringup)/launch/crazyflie_simulation.launch.py"/>
+  <set_env
+    if="$(var use_crazyswarm2_server)"
+    name="PYTHONPATH"
+    value="$(var venv_site_packages):$(var cffirmware_python_path):$(env PYTHONPATH)"/>
+
+  <include
+    unless="$(var use_crazyswarm2_server)"
+    file="$(find-pkg-share ros_gz_crazyflie_bringup)/launch/crazyflie_simulation.launch.py"/>
+  <include
+    if="$(var use_crazyswarm2_server)"
+    file="$(find-pkg-share crazyflie)/launch/launch.py">
+    <arg name="crazyflies_yaml_file" value="$(var crazyflies_yaml_file)"/>
+    <arg name="backend" value="$(var crazyswarm_backend)"/>
+    <arg name="mocap" value="False"/>
+    <arg name="rviz" value="False"/>
+    <arg name="gui" value="True"/>
+    <arg name="teleop" value="False"/>
+  </include>
   <arg name="map_yaml" default="$(find-pkg-share crazyflie_goal_follower)/maps/greenhouse_map.yaml"/>
 
   <node
-    pkg="crazyflie_ros2_multiranger_test"
+    if="$(var enable_service_compat)"
+    pkg="crazyflie_ros2_test"
     exec="service_compat"
     name="crazyflie_service_compat"
     output="screen">
     <param name="robot_prefix" value="$(var robot_prefix)"/>
-    <param name="use_sim_time" value="$(var use_sim_time)"/>
   </node>
 
   <node
@@ -92,9 +145,12 @@
     <param name="takeoff_height" value="$(var takeoff_height)"/>
     <param name="takeoff_duration_sec" value="$(var takeoff_duration_sec)"/>
     <param name="go_to_duration_sec" value="$(var go_to_duration_sec)"/>
+    <param name="wait_for_services_timeout_sec" value="$(var wait_for_services_timeout_sec)"/>
     <param name="use_sim_time" value="$(var use_sim_time)"/>
     <param name="use_map_line_check" value="$(var use_map_line_check)"/>
     <param name="map_topic" value="$(var map_topic)"/>
+    <param name="tf_topic" value="$(var tf_topic)"/>
+    <param name="tf_child_frame" value="$(var tf_child_frame)"/>
     <param name="occupancy_block_threshold" value="$(var occupancy_block_threshold)"/>
     <param name="treat_unknown_as_obstacle" value="$(var treat_unknown_as_obstacle)"/>
   </node>
@@ -115,6 +171,15 @@
   </node>
 
   <node
+    if="$(var use_crazyswarm2_server)"
+    pkg="tf2_ros"
+    exec="static_transform_publisher"
+    name="map_to_world_tf"
+    output="screen"
+    args="0 0 0 0 0 0 map world"/>
+
+  <node
+    unless="$(var use_crazyswarm2_server)"
     pkg="tf2_ros"
     exec="static_transform_publisher"
     name="map_to_odom_tf"

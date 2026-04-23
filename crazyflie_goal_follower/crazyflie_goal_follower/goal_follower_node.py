@@ -3,13 +3,15 @@ import rclpy
 import math
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, HistoryPolicy, QoSProfile, ReliabilityPolicy
+from rclpy.signals import SignalHandlerOptions
 
 from geometry_msgs.msg import Point, PoseStamped
 from builtin_interfaces.msg import Duration as MsgDuration
 from nav_msgs.msg import Odometry, OccupancyGrid
+from tf2_msgs.msg import TFMessage
 from tf_transformations import euler_from_quaternion
 
-from crazyflie_interfaces.srv import Takeoff, GoTo
+from crazyflie_interfaces.srv import Takeoff, GoTo, Land
 
 
 def to_msg_duration(seconds: float) -> MsgDuration:
@@ -32,16 +34,23 @@ class GoalFollowerNode(Node):
         """
         super().__init__("goal_follower_node")
 
-        self.prefix = str(self.declare_and_get("robot_prefix", "/crazyflie"))
+        self.prefix = str(self.declare_and_get("robot_prefix", "crazyflie")).strip("/")
         self.goal_topic = self.declare_and_get("goal_topic", "/goal_pose")
-        self.use_takeoff = self.declare_and_get("use_takeoff", True)
+        self.use_takeoff = self.declare_and_get("use_takeoff", False)
         self.takeoff_height = self.declare_and_get("takeoff_height", 0.5)
         self.takeoff_duration_sec = self.declare_and_get("takeoff_duration_sec", 2.0)
         self.go_to_duration_sec = self.declare_and_get("go_to_duration_sec", 1.25)
+        self.land_on_shutdown = self.declare_and_get("land_on_shutdown", True)
+        self.land_height = self.declare_and_get("land_height", 0.05) #Safety margin
+        self.land_duration_sec = self.declare_and_get("land_duration_sec", 2.0)
         self.goal_follow_height = self.declare_and_get("goal_follow_height", 0.5)
         self.wait_timeout = self.declare_and_get("wait_for_services_timeout_sec", 10.0)
         self.use_map_line_check = self.declare_and_get("use_map_line_check", True)
         self.map_topic = self.declare_and_get("map_topic", "/map")
+        self.odom_topic = self.declare_and_get("odom_topic", f"/{self.prefix}/odom")
+        self.pose_topic = self.declare_and_get("pose_topic", f"/{self.prefix}/pose")
+        self.tf_topic = self.declare_and_get("tf_topic", "/tf")
+        self.tf_child_frame = str(self.declare_and_get("tf_child_frame", self.prefix)).strip("/")
         self.occupancy_block_threshold = self.declare_and_get("occupancy_block_threshold", 65)
         self.treat_unknown_as_obstacle = self.declare_and_get("treat_unknown_as_obstacle", True)
 
@@ -50,15 +59,19 @@ class GoalFollowerNode(Node):
         self.takeoff_in_progress = False
         self.current_position = None
         self.map_msg = None
+        self.position_source = "none"
 
         self.get_logger().info(f"Using robot prefix: /{self.prefix}")
 
         # Clients
         self.takeoff_cli = self.create_client(Takeoff, f"/{self.prefix}/takeoff")
         self.goto_cli = self.create_client(GoTo, f"/{self.prefix}/go_to")
+        self.land_cli = self.create_client(Land, f"/{self.prefix}/land")
 
         # Subscriptions
-        self.odom_sub = self.create_subscription(Odometry, f"/{self.prefix}/odom", self.odom_cb, 10)
+        self.odom_sub = self.create_subscription(Odometry, self.odom_topic, self.odom_cb, 10)
+        self.pose_sub = self.create_subscription(PoseStamped, self.pose_topic, self.pose_cb, 10)
+        self.tf_sub = self.create_subscription(TFMessage, self.tf_topic, self.tf_cb, 20)
         self.goal_sub = self.create_subscription(PoseStamped, self.goal_topic, self.goal_cb, 10)
         if self.use_map_line_check:
             map_qos = QoSProfile(
@@ -75,6 +88,10 @@ class GoalFollowerNode(Node):
             f"Goal follower ready. Listening on {self.goal_topic}"
             + (f", map checks on {self.map_topic}" if self.use_map_line_check else "")
         )
+        self.get_logger().info(
+            f"Waiting for position from {self.odom_topic} (preferred), "
+            f"{self.pose_topic}, or TF child '{self.tf_child_frame}' on {self.tf_topic}"
+        )
 
     def declare_and_get(self, name: str, default):
         """! @brief Declare a parameter and return its value."""
@@ -89,6 +106,8 @@ class GoalFollowerNode(Node):
         required = [(self.goto_cli, "go_to")]
         if self.use_takeoff:
             required.append((self.takeoff_cli, "takeoff"))
+        if self.land_on_shutdown:
+            required.append((self.land_cli, "land"))
 
         for client, name in required:
             if not client.wait_for_service(timeout_sec=self.wait_timeout):
@@ -98,19 +117,58 @@ class GoalFollowerNode(Node):
 
     def odom_cb(self, msg: Odometry):
         """!
-        @brief Odometry callback used to mark odometry availability and capture initial pose.
+        @brief Odometry callback used to track current position.
         @param msg Incoming odometry message.
         """
         p = msg.pose.pose.position
-        self.current_position = (float(p.x), float(p.y), float(p.z))
+        self.update_current_position(float(p.x), float(p.y), float(p.z), source="odom")
+
+    def pose_cb(self, msg: PoseStamped):
+        """!
+        @brief Pose callback fallback for Crazyswarm2 setups without odom logging.
+        @param msg Incoming pose message.
+        """
+        p = msg.pose.position
+        # Prefer odom when available, but allow pose as fallback.
+        if self.position_source != "odom":
+            self.update_current_position(float(p.x), float(p.y), float(p.z), source="pose")
+
+    def tf_cb(self, msg: TFMessage):
+        """! @brief TF callback fallback for Crazyswarm2 sim where odom/pose topics may be absent."""
+        # Prefer odom or pose when present, but allow TF as last fallback.
+        if self.position_source in ("odom", "pose"):
+            return
+
+        for transform in msg.transforms:
+            child = str(transform.child_frame_id).strip("/")
+            if not self.tf_child_matches(child):
+                continue
+            t = transform.transform.translation
+            self.update_current_position(float(t.x), float(t.y), float(t.z), source="tf")
+            return
+
+    def tf_child_matches(self, child_frame: str) -> bool:
+        """! @brief Match TF child frame robustly across common naming variants."""
+        child = str(child_frame).strip("/")
+        target = self.tf_child_frame
+        return (
+            child == target
+            or child.startswith(target + "/")
+            or child.endswith("/" + target)
+        )
+
+    def update_current_position(self, x: float, y: float, z: float, source: str):
+        """! @brief Store current position and trigger readiness-dependent startup once."""
+        self.current_position = (x, y, z)
+        self.position_source = source
 
         if not self.ready:
             self.get_logger().info(
-                f"Initial position captured: x={p.x:.2f}, y={p.y:.2f}, z={p.z:.2f}"
+                f"Initial {source} position captured: x={x:.2f}, y={y:.2f}, z={z:.2f}"
             )
             self.ready = True
             if self.use_takeoff:
-                self.get_logger().info("Initiating automatic takeoff after odometry became available")
+                self.get_logger().info("Initiating automatic takeoff after position became available")
                 self.ensure_takeoff_started()
 
     def map_cb(self, msg: OccupancyGrid):
@@ -122,7 +180,9 @@ class GoalFollowerNode(Node):
         if self.current_position is None:
             return
         x, y, z = self.current_position
-        self.get_logger().info(f"Current odom position: x={x:.2f}, y={y:.2f}, z={z:.2f}")
+        self.get_logger().info(
+            f"Current {self.position_source} position: x={x:.2f}, y={y:.2f}, z={z:.2f}"
+        )
 
     def call_service(self, client, request, label: str, on_success=None, on_error=None):
         """!
@@ -192,6 +252,23 @@ class GoalFollowerNode(Node):
         self.takeoff_in_progress = False
         self.has_taken_off = False
 
+    def ensure_land_started(self):
+        """! @brief Ensure that the shutdown landing process has been initiated."""
+        if not self.land_cli.service_is_ready():
+            self.get_logger().warn(f"Skipping shutdown landing: /{self.prefix}/land not ready")
+            return
+
+        req = Land.Request(
+            group_mask=0,
+            height=float(self.land_height),
+            duration=to_msg_duration(float(self.land_duration_sec)),
+        )
+        self.land_cli.call_async(req)
+        self.get_logger().info(
+            f"Land sent during shutdown (height={self.land_height:.2f}, "
+            f"duration={self.land_duration_sec:.2f}s)"
+        )
+
     def send_goto_for_goal(self, msg: PoseStamped):
         """! @brief Send goal as absolute go_to target from PoseStamped."""
         req = GoTo.Request()
@@ -211,6 +288,15 @@ class GoalFollowerNode(Node):
             f"Sent go_to: x={req.goal.x:.2f} y={req.goal.y:.2f} "
             f"z={req.goal.z:.2f} yaw={req.yaw:.1f}deg"
         )
+
+    def land_before_shutdown(self):
+        """! @brief Best-effort landing call used when Ctrl+C stops the node."""
+        if not self.land_on_shutdown:
+            self.get_logger().info("Shutdown landing is disabled (land_on_shutdown=false)")
+            return
+
+        self.get_logger().info("Ctrl+C received: initiating landing")
+        self.ensure_land_started()
 
     @staticmethod
     def bresenham_line(x0: int, y0: int, x1: int, y1: int):
@@ -281,7 +367,9 @@ class GoalFollowerNode(Node):
         @param msg Target pose message.
         """
         if not self.ready:
-            self.get_logger().warn("Ignoring goal: no odometry yet")
+            self.get_logger().warn(
+                "Ignoring goal: no position yet (waiting for odom/pose/tf)"
+            )
             return
 
         if self.use_takeoff and not self.has_taken_off:
@@ -305,14 +393,21 @@ class GoalFollowerNode(Node):
 
 
 def main():
-    rclpy.init()
+    # Keep ROS context alive on Ctrl+C long enough to send the shutdown land request.
+    rclpy.init(signal_handler_options=SignalHandlerOptions.NO)
     node = GoalFollowerNode()
     try:
         rclpy.spin(node)
+    except KeyboardInterrupt:
+        node.land_before_shutdown()
     finally:
         node.destroy_node()
-        rclpy.shutdown()
-
+        try:
+            if rclpy.ok():
+                rclpy.shutdown()
+        except Exception:
+            # Launch may have already shut down this context.
+            pass
 
 if __name__ == "__main__":
     main()
