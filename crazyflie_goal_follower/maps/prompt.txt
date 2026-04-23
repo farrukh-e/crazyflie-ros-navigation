@@ -1,0 +1,21 @@
+You are in:
+~/Projects/Crazyflie/ros2_ws/src/crazyflie-ros-navigation/crazyflie_goal_follower/maps/
+
+Task:
+1) Read greenhouse_map.pgm (and greenhouse_map.yaml for map resolution/origin).
+2) Generate waypoint path in ROS map/world frame.
+3) Overwrite waypoints.txt in this folder.
+
+Requirements:
+- Start exactly at x=0.00, y=1.15.
+- End exactly at x=0.00, y=1.15.
+- Survey all greenhouse racks by following the rack face that points toward the map center/origin side.
+- Keep at least 0.20 m clearance from static obstacles (treat obstacles as inflated by 0.20 m).
+- Waypoints must stay in free space and be collision-safe.
+- Use practical step spacing (about 0.20–0.30 m between consecutive points).
+
+Output file format (waypoints.txt):
+- Optional comment lines starting with `#`.
+- Waypoint lines must be exactly: `x, y`
+- Use decimal meters with two digits (example: `0.00, 1.15`).
+- Do not output any extra prose; only write the file.
