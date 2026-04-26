@@ -25,6 +25,18 @@
     default="1.25"
     description="Go-to command duration in seconds"/>
   <arg
+    name="land_on_shutdown"
+    default="true"
+    description="Attempt landing when goal follower shuts down"/>
+  <arg
+    name="land_height"
+    default="0.0"
+    description="Landing height in meters"/>
+  <arg
+    name="land_duration_sec"
+    default="2.0"
+    description="Landing duration in seconds"/>
+  <arg
     name="use_sim_time"
     default="true"
     description="Use simulation time if true"/>
@@ -73,7 +85,7 @@
   <arg name="map_yaml" default="$(find-pkg-share crazyflie_goal_follower)/maps/greenhouse_map.yaml"/>
 
   <node
-    pkg="crazyflie_ros2_multiranger_test"
+    pkg="crazyflie_goal_follower"
     exec="service_compat"
     name="crazyflie_service_compat"
     output="screen">
@@ -92,6 +104,9 @@
     <param name="takeoff_height" value="$(var takeoff_height)"/>
     <param name="takeoff_duration_sec" value="$(var takeoff_duration_sec)"/>
     <param name="go_to_duration_sec" value="$(var go_to_duration_sec)"/>
+    <param name="land_on_shutdown" value="$(var land_on_shutdown)"/>
+    <param name="land_height" value="$(var land_height)"/>
+    <param name="land_duration_sec" value="$(var land_duration_sec)"/>
     <param name="use_sim_time" value="$(var use_sim_time)"/>
     <param name="use_map_line_check" value="$(var use_map_line_check)"/>
     <param name="map_topic" value="$(var map_topic)"/>
