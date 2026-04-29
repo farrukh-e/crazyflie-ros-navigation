@@ -41,14 +41,6 @@
     default="/map"
     description="OccupancyGrid topic for static map checks"/>
   <arg
-    name="tf_topic"
-    default="/tf"
-    description="TF topic used as position fallback when odom/pose are unavailable"/>
-  <arg
-    name="tf_child_frame"
-    default="$(var robot_prefix)"
-    description="TF child frame to track (commonly robot name like cf231)"/>
-  <arg
     name="occupancy_block_threshold"
     default="65"
     description="Occupancy value considered blocked"/>
@@ -131,8 +123,6 @@
     <param name="use_sim_time" value="$(var use_sim_time)"/>
     <param name="use_map_line_check" value="$(var use_map_line_check)"/>
     <param name="map_topic" value="$(var map_topic)"/>
-    <param name="tf_topic" value="$(var tf_topic)"/>
-    <param name="tf_child_frame" value="$(var tf_child_frame)"/>
     <param name="occupancy_block_threshold" value="$(var occupancy_block_threshold)"/>
     <param name="treat_unknown_as_obstacle" value="$(var treat_unknown_as_obstacle)"/>
   </node>

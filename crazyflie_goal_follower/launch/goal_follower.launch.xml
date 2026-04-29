@@ -2,7 +2,7 @@
 <launch>
   <arg
     name="robot_prefix"
-    default="crazyflie"
+    default="cf231"
     description="Robot namespace/prefix used by goal follower node"/>
   <arg
     name="goal_topic"
@@ -41,14 +41,6 @@
     default="/map"
     description="OccupancyGrid topic for static map checks"/>
   <arg
-    name="tf_topic"
-    default="/tf"
-    description="TF topic used as position fallback when odom/pose are unavailable"/>
-  <arg
-    name="tf_child_frame"
-    default="$(var robot_prefix)"
-    description="TF child frame to track (commonly robot name like cf231)"/>
-  <arg
     name="occupancy_block_threshold"
     default="65"
     description="Occupancy value considered blocked"/>
@@ -86,7 +78,7 @@
     description="Enable compatibility services for sim go_to/takeoff/land"/>
   <arg
     name="use_crazyswarm2_server"
-    default="false"
+    default="true"
     description="Use Crazyswarm2 server instead of ros_gz control services"/>
   <arg
     name="crazyflies_yaml_file"
@@ -96,6 +88,10 @@
     name="crazyswarm_backend"
     default="sim"
     description="Crazyswarm2 backend (sim, cflib, cpp) when use_crazyswarm2_server=true"/>
+  <arg
+    name="crazyswarm_gui"
+    default="false"
+    description="Start Crazyswarm2 NiceGUI process (disable if NumPy/NiceGUI mismatch exists)"/>
   <arg
     name="venv_site_packages"
     default="$(env HOME)/Projects/Crazyflie/.venv/lib/python3.12/site-packages"
@@ -120,7 +116,7 @@
     <arg name="backend" value="$(var crazyswarm_backend)"/>
     <arg name="mocap" value="False"/>
     <arg name="rviz" value="False"/>
-    <arg name="gui" value="True"/>
+    <arg name="gui" value="$(var crazyswarm_gui)"/>
     <arg name="teleop" value="False"/>
   </include>
   <arg name="map_yaml" default="$(find-pkg-share crazyflie_goal_follower)/maps/greenhouse_map.yaml"/>
@@ -149,8 +145,6 @@
     <param name="use_sim_time" value="$(var use_sim_time)"/>
     <param name="use_map_line_check" value="$(var use_map_line_check)"/>
     <param name="map_topic" value="$(var map_topic)"/>
-    <param name="tf_topic" value="$(var tf_topic)"/>
-    <param name="tf_child_frame" value="$(var tf_child_frame)"/>
     <param name="occupancy_block_threshold" value="$(var occupancy_block_threshold)"/>
     <param name="treat_unknown_as_obstacle" value="$(var treat_unknown_as_obstacle)"/>
   </node>
