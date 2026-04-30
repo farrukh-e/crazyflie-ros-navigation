@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
+import math
 from pathlib import Path
-from typing import List, Tuple
+from typing import List, Optional, Tuple
 
 import rclpy
 from geometry_msgs.msg import PoseStamped
 from rclpy.node import Node
+from tf_transformations import quaternion_from_euler
 
-Waypoint = Tuple[float, float, float]
+Waypoint = Tuple[float, float, float, Optional[float]]
 
 class WaypointPublisherNode(Node):
     def __init__(self):
@@ -61,20 +63,35 @@ class WaypointPublisherNode(Node):
             self.publish_timer = None
             return
 
-        x, y, z = self.waypoints[self.next_waypoint_idx]
+        x, y, z, yaw_rad = self.waypoints[self.next_waypoint_idx]
+
         msg = PoseStamped()
         msg.header.stamp = self.get_clock().now().to_msg()
         msg.header.frame_id = self.frame_id
         msg.pose.position.x = x
         msg.pose.position.y = y
         msg.pose.position.z = z
-        msg.pose.orientation.w = 1.0
+        if yaw_rad is not None:
+            qx, qy, qz, qw = quaternion_from_euler(0.0, 0.0, yaw_rad)
+            msg.pose.orientation.x = float(qx)
+            msg.pose.orientation.y = float(qy)
+            msg.pose.orientation.z = float(qz)
+            msg.pose.orientation.w = float(qw)
+        else:
+            # Keep a valid identity quaternion when heading is omitted.
+            msg.pose.orientation.w = 1.0
 
         self.goal_pub.publish(msg)
-        self.get_logger().info(
-            f"Published waypoint {self.next_waypoint_idx + 1}/{len(self.waypoints)}: "
-            f"x={x:.2f}, y={y:.2f}, z={z:.2f}"
-        )
+        if yaw_rad is not None:
+            self.get_logger().info(
+                f"Published waypoint {self.next_waypoint_idx + 1}/{len(self.waypoints)}: "
+                f"x={x:.2f}, y={y:.2f}, z={z:.2f}, yaw_deg={math.degrees(yaw_rad):.1f}"
+            )
+        else:
+            self.get_logger().info(
+                f"Published waypoint {self.next_waypoint_idx + 1}/{len(self.waypoints)}: "
+                f"x={x:.2f}, y={y:.2f}, z={z:.2f}, yaw=omitted"
+            )
         self.next_waypoint_idx += 1
 
         if self.next_waypoint_idx >= len(self.waypoints):
@@ -86,7 +103,7 @@ class WaypointPublisherNode(Node):
         """!
         @brief Load waypoint rows from a text file.
         @details Each non-empty line should look like:
-                 x, y or x, y, z
+                 x, y or x, y, z or x, y, z, yaw_deg
         """
         path = Path(waypoints_file).expanduser()
         if not path.is_file():
@@ -104,7 +121,8 @@ class WaypointPublisherNode(Node):
                 x = float(coordinates[0])
                 y = float(coordinates[1])
                 z = float(coordinates[2]) if len(coordinates) > 2 else self.default_z
-                waypoints.append((x, y, z))
+                yaw_rad = math.radians(float(coordinates[3])) if len(coordinates) > 3 else None
+                waypoints.append((x, y, z, yaw_rad))
         if not waypoints:
             raise RuntimeError(f"No valid waypoints found in file: {path}")
         return waypoints

@@ -1,21 +1,45 @@
 You are in:
 ~/Projects/Crazyflie/ros2_ws/src/crazyflie-ros-navigation/crazyflie_goal_follower/maps/
 
-Task:
-1) Read greenhouse_map.pgm (and greenhouse_map.yaml for map resolution/origin).
-2) Generate waypoint path in ROS map/world frame.
-3) Overwrite waypoints.txt in this folder.
+Goal:
+Generate a collision-safe survey path for greenhouse racks and overwrite `waypoints.txt`.
 
-Requirements:
-- Start exactly at x=0.00, y=1.15.
-- End exactly at x=0.00, y=1.15.
-- Survey all greenhouse racks by following the rack face that points toward the map center/origin side.
-- Keep at least 0.20 m clearance from static obstacles (treat obstacles as inflated by 0.20 m).
-- Waypoints must stay in free space and be collision-safe.
-- Use practical step spacing (about 0.20–0.30 m between consecutive points).
+Inputs:
+1) `greenhouse_map.pgm`
+2) `greenhouse_map.yaml` (resolution + origin)
 
-Output file format (waypoints.txt):
-- Optional comment lines starting with `#`.
-- Waypoint lines must be exactly: `x, y`
-- Use decimal meters with two digits (example: `0.00, 1.15`).
-- Do not output any extra prose; only write the file.
+Coordinate/units:
+- Use ROS `map` frame coordinates (meters).
+- Heading is `yaw_deg` (degrees, ROS yaw about +Z).
+- Direction convention: 0=+X, 90=+Y, -90=-Y, +/-180=-X.
+
+Mission requirements:
+- Start waypoint must be exactly: `0.00, 1.15, 0.00, 0.0`
+- End waypoint must be exactly: `0.00, 1.15, 0.00, 0.0`
+- Survey all rack faces that point toward map center/origin side.
+- Maintain at least 0.20 m clearance from static obstacles (treat map obstacles as inflated by 0.20 m).
+- Keep all waypoints in free space and inside map bounds.
+- Consecutive waypoint spacing should be 0.20 to 0.30 m (allow up to 0.35 m only when necessary).
+- No duplicate consecutive waypoints.
+- Heading is required for every waypoint.
+- On survey segments, heading must fully face the rack
+
+Body-frame / camera convention:
+- The drone camera optical axis is aligned with the drone +X body axis.
+- `yaw_deg` sets camera look direction in the map frame.
+
+Heading requirements for survey waypoints:
+- Heading must align with the inward rack-face normal (camera +X points from aisle into the rack face), not just any perpendicular.
+- Do not use tangential headings along the rack face for survey waypoints.
+- Keep this facing direction consistent along each straight survey pass (avoid unnecessary yaw flips).
+
+Output format (`waypoints.txt` only):
+- Optional comments may start with `#`.
+- Waypoint rows must be exactly: `x, y, z, yaw_deg`
+- Use two decimals for x/y/z and one decimal for yaw.
+- Example: `-1.35, -0.48, 0.00, 90.0`
+
+Output rules:
+- Overwrite `waypoints.txt`.
+- Do not print explanations or extra prose.
+- Only write the file content.
