@@ -32,7 +32,7 @@ class GoalFollowerNode(Node):
         """
         super().__init__("goal_follower_node")
 
-        self.prefix = str(self.declare_and_get("robot_prefix", "/crazyflie"))
+        self.prefix = str(self.declare_and_get("robot_prefix", "crazyflie"))
         self.goal_topic = self.declare_and_get("goal_topic", "/goal_pose")
         self.use_takeoff = self.declare_and_get("use_takeoff", True)
         self.takeoff_height = self.declare_and_get("takeoff_height", 0.5)
