@@ -7,6 +7,8 @@ import rclpy
 from geometry_msgs.msg import PoseStamped
 from rclpy.node import Node
 from tf_transformations import quaternion_from_euler
+from builtin_interfaces.msg import Duration as MsgDuration
+from crazyflie_interfaces.srv import Land
 
 Waypoint = Tuple[float, float, float, Optional[float]]
 
@@ -16,15 +18,20 @@ class WaypointPublisherNode(Node):
         @brief Initialize node parameters, publisher, and timers.
         """
         super().__init__("waypoint_publisher_node")
-
+        self.robot_prefix = str(self.declare_and_get("robot_prefix", "crazyflie")).strip("/")
         self.goal_topic = str(self.declare_and_get("goal_topic", "/goal_pose"))
         self.waypoints_file = str(self.declare_and_get("waypoints_txt", ""))
         self.frame_id = str(self.declare_and_get("frame_id", "map"))
         self.default_z = float(self.declare_and_get("default_z", 0.5))
         self.publish_period_sec = float(self.declare_and_get("publish_period_sec", 1.05))
         self.start_delay_sec = float(self.declare_and_get("start_delay_sec", 5.0))
+        self.land_after_last_waypoint = bool(self.declare_and_get("land_after_last_waypoint", True))
+        self.land_height = float(self.declare_and_get("land_height", 0.0))
+        self.land_duration_sec = float(self.declare_and_get("land_duration_sec", 3.0))
+
 
         self.goal_pub = self.create_publisher(PoseStamped, self.goal_topic, 10)
+        self.land_cli = self.create_client(Land, f"/{self.robot_prefix}/land")
         self.waypoints = self.load_waypoints(self.waypoints_file)
         self.next_waypoint_idx = 0
         self.publish_timer = None
@@ -56,11 +63,27 @@ class WaypointPublisherNode(Node):
         if self.next_waypoint_idx < len(self.waypoints):
             self.publish_timer = self.create_timer(self.publish_period_sec, self.publish_waypoint)
 
+    def send_land(self):
+        """! @brief Send a land request to the Crazyflie"""
+        if not self.land_cli.service_is_ready():
+            self.get_logger().warn(f"/{self.robot_prefix}/land not ready; skipping land")
+            return
+        req = Land.Request()
+        req.group_mask = 0
+        req.height = self.land_height
+        req.duration = MsgDuration()
+        req.duration.sec = int(self.land_duration_sec)
+        req.duration.nanosec = int((self.land_duration_sec - int(self.land_duration_sec)) * 1e9)
+        self.land_cli.call_async(req)
+        self.get_logger().info("Sent land request after last waypoint")
+
     def publish_waypoint(self):
         """! @brief Publish the next waypoint as a PoseStamped goal."""
         if self.next_waypoint_idx >= len(self.waypoints):
             self.publish_timer.cancel()
             self.publish_timer = None
+            if self.land_after_last_waypoint:
+                self.send_land()
             return
 
         x, y, z, yaw_rad = self.waypoints[self.next_waypoint_idx]
@@ -98,6 +121,8 @@ class WaypointPublisherNode(Node):
             self.get_logger().info("Finished publishing all waypoints")
             self.publish_timer.cancel()
             self.publish_timer = None
+            if self.land_after_last_waypoint:
+                self.send_land()
 
     def load_waypoints(self, waypoints_file: str) -> List[Waypoint]:
         """!

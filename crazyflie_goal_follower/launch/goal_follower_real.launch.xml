@@ -81,6 +81,18 @@
     default="1.0"
     description="Delay before first waypoint publish"/>
   <arg
+    name="waypoint_land_after_last_waypoint"
+    default="false"
+    description="If true, waypoint publisher sends a land request after publishing the final waypoint"/>
+  <arg
+    name="waypoint_land_height"
+    default="0.05"
+    description="Landing height used by waypoint publisher when landing after the final waypoint"/>
+  <arg
+    name="waypoint_land_duration_sec"
+    default="3.0"
+    description="Landing duration used by waypoint publisher when landing after the final waypoint"/>
+  <arg
     name="map_yaml"
     default="$(find-pkg-share crazyflie_goal_follower)/maps/greenhouse_map.yaml"
     description="Static map YAML used by nav2 map_server"/>
@@ -149,6 +161,10 @@
     <param name="default_z" value="$(var waypoint_default_z)"/>
     <param name="publish_period_sec" value="$(var waypoint_publish_period_sec)"/>
     <param name="start_delay_sec" value="$(var waypoint_start_delay_sec)"/>
+    <param name="robot_prefix" value="$(var robot_prefix)"/>
+    <param name="land_after_last_waypoint" value="$(var waypoint_land_after_last_waypoint)"/>
+    <param name="land_height" value="$(var waypoint_land_height)"/>
+    <param name="land_duration_sec" value="$(var waypoint_land_duration_sec)"/>
     <param name="use_sim_time" value="$(var use_sim_time)"/>
   </node>
 
