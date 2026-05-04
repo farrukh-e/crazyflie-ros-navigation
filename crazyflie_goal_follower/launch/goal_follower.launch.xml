@@ -74,11 +74,11 @@
     description="Default z used when CSV row has no z value"/>
   <arg
     name="waypoint_publish_period_sec"
-    default="3.0"
+    default="5.0"
     description="Period between publishing CSV waypoints"/>
   <arg
     name="waypoint_start_delay_sec"
-    default="1.0"
+    default="3.0"
     description="Delay before first waypoint publish"/>
   <arg
     name="waypoint_land_after_last_waypoint"

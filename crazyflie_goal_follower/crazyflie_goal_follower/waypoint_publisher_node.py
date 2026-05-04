@@ -93,7 +93,7 @@ class WaypointPublisherNode(Node):
         msg.header.frame_id = self.frame_id
         msg.pose.position.x = x
         msg.pose.position.y = y
-        msg.pose.position.z = z
+        msg.pose.position.z = 0.5
         if yaw_rad is not None:
             qx, qy, qz, qw = quaternion_from_euler(0.0, 0.0, yaw_rad)
             msg.pose.orientation.x = float(qx)

@@ -16,7 +16,10 @@ setup(
         ),
         (f"share/{package_name}", ["package.xml"]),
         (os.path.join("share", package_name, "launch"), glob("launch/*")),
-        (os.path.join("share", package_name, "maps"), glob("maps/*")),
+        (
+            os.path.join("share", package_name, "maps"),
+            [path for path in glob("maps/*") if os.path.isfile(path)],
+        ),
     ],
     install_requires=["setuptools"],
     zip_safe=True,

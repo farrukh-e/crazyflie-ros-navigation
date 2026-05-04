@@ -18,11 +18,11 @@
     description="Takeoff height in meters"/>
   <arg
     name="takeoff_duration_sec"
-    default="2.0"
+    default="3.0"
     description="Takeoff duration in seconds"/>
   <arg
     name="go_to_duration_sec"
-    default="1.25"
+    default="3.0"
     description="Go-to command duration in seconds"/>
   <arg
     name="land_on_shutdown"
@@ -34,7 +34,7 @@
     description="Landing height in meters"/>
   <arg
     name="land_duration_sec"
-    default="2.0"
+    default="3.0"
     description="Landing duration in seconds"/>
   <arg
     name="use_sim_time"
@@ -74,7 +74,7 @@
     description="Default z used when CSV row has no z value"/>
   <arg
     name="waypoint_publish_period_sec"
-    default="1.0"
+    default="3.0"
     description="Period between publishing CSV waypoints"/>
   <arg
     name="waypoint_start_delay_sec"
@@ -82,7 +82,7 @@
     description="Delay before first waypoint publish"/>
   <arg
     name="waypoint_land_after_last_waypoint"
-    default="false"
+    default="true"
     description="If true, waypoint publisher sends a land request after publishing the final waypoint"/>
   <arg
     name="waypoint_land_height"

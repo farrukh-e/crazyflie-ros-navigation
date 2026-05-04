@@ -14,8 +14,8 @@ Coordinate/units:
 - Direction convention: 0=+X, 90=+Y, -90=-Y, +/-180=-X.
 
 Mission requirements:
-- Start waypoint must be exactly: `0.00, 1.15, 0.00, 0.0`
-- End waypoint must be exactly: `0.00, 1.15, 0.00, 0.0`
+- Start waypoint must be exactly: `0.00, 1.15, 0.50, 0.0`
+- End waypoint must be exactly: `0.00, 1.15, 0.50, 0.0`
 - Survey all rack faces that point toward map center/origin side.
 - Maintain at least 0.20 m clearance from static obstacles (treat map obstacles as inflated by 0.20 m).
 - Keep all waypoints in free space and inside map bounds.
@@ -37,7 +37,7 @@ Output format (`waypoints.txt` only):
 - Optional comments may start with `#`.
 - Waypoint rows must be exactly: `x, y, z, yaw_deg`
 - Use two decimals for x/y/z and one decimal for yaw.
-- Example: `-1.35, -0.48, 0.00, 90.0`
+- Example: `-1.35, -0.48, 0.50, 90.0`
 
 Output rules:
 - Overwrite `waypoints.txt`.
