@@ -70,11 +70,11 @@
     description="Frame id for published PoseStamped goals"/>
   <arg
     name="waypoint_default_z"
-    default="0.0"
+    default="0.5"
     description="Default z used when CSV row has no z value"/>
   <arg
     name="waypoint_publish_period_sec"
-    default="5.0"
+    default="3.0"
     description="Period between publishing CSV waypoints"/>
   <arg
     name="waypoint_start_delay_sec"
